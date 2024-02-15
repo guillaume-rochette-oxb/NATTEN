@@ -55,12 +55,12 @@ HAS_CUDA = (
     or os.getenv("FORCE_CUDA", "0") == "1"
 )
 NATTEN_IS_BUILDING_DIST = bool(os.getenv("NATTEN_IS_BUILDING_DIST", 0))
-DEFAULT_N_WORKERS = max(1, (multiprocessing.cpu_count() // 4))
-cuda_arch = os.getenv("NATTEN_CUDA_ARCH", "")
+DEFAULT_N_WORKERS = os.cpu_count()
+cuda_arch = os.getenv("NATTEN_CUDA_ARCH", "60;61;62;70;72;75;80;86;87;89")
 if HAS_CUDA:
     if not cuda_arch:
         cuda_device = torch.cuda.get_device_properties(torch.cuda.current_device())
-        sm = cuda_device.major + cuda_device.minor * 0.1
+        sm = cuda_device.major * 10 + cuda_device.minor
         cuda_arch = f"{sm}"
 
     # TODO: raise an error or at least a warning when torch cuda doesn't match
@@ -110,12 +110,14 @@ def get_version() -> str:
 
 def _check_cuda_arch(arch: Any) -> int:
     try:
-        arch = float(arch)
-        arch = arch * 10  # 8.6 => 86
+        arch = int(arch)
+        # arch = float(arch)
+        # arch = arch * 10  # 8.6 => 86
         assert (
             arch >= 30 and arch < 100
         ), f"Only SM30 and above are supported at this time, got {arch}."
-        return int(arch)
+        # return int(arch)
+        return arch
     except ValueError:
         raise ValueError(f"Invalid architecture list {arch}.")
 
@@ -176,8 +178,9 @@ class BuildExtension(build_ext):
         if HAS_CUDA:
             assert max_sm >= 30
             cmake_args.append("-DNATTEN_WITH_CUDA=1")
-            if max_sm >= 70:
-                cmake_args.append("-DNATTEN_WITH_CUTLASS=1")
+            cmake_args.append(f"-DCMAKE_CUDA_COMPILER={CUDA_HOME}/bin/nvcc")
+            # if max_sm >= 70:
+            #     cmake_args.append("-DNATTEN_WITH_CUTLASS=1")
 
         if not os.path.exists(self.build_lib):
             os.makedirs(self.build_lib)
